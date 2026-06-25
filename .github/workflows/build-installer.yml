@@ -1,0 +1,14 @@
+name: Build and Package Installer
+
+on:
+  repository_dispatch:
+    types: [main_repo_updated]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout void-updates code
+        uses: actions/checkout@v4
+
