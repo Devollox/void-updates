@@ -15,7 +15,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -28,13 +28,18 @@ jobs:
           New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
           Get-ChildItem -Path "build/bin" -Filter "*.exe" -File | Remove-Item -Force
 
-      - name: Download latest Void Presence installer
+      - name: Download Void Presence installer for tag
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $owner = 'Devollox'
           $repo  = 'void-presence'
+          $tag   = "${{ github.event.client_payload.tag }}"
+
+          if (-not $tag) {
+            throw "client_payload.tag is empty"
+          }
 
           $headers = @{
             'Accept'        = 'application/vnd.github+json'
@@ -42,7 +47,7 @@ jobs:
           }
 
           $release = Invoke-RestMethod `
-            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
+            -Uri "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" `
             -Headers $headers
 
           $asset = $release.assets |
@@ -67,9 +72,9 @@ jobs:
             throw "Не найден Void.Presence.Setup.*.exe в build/bin"
           }
 
-          $name = $installer.Name
-          $base = [System.IO.Path]::GetFileNameWithoutExtension($name)
-          $parts = $base.Split('.')
+          $name    = $installer.Name
+          $base    = [System.IO.Path]::GetFileNameWithoutExtension($name)
+          $parts   = $base.Split('.')
           $version = ($parts[3..($parts.Length-1)] -join '.')
 
           $wailsPath = "wails.json"
@@ -80,23 +85,20 @@ jobs:
           $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
 
       - name: Install frontend dependencies
-        if: steps.check_release.outputs.exists == 'false'
         working-directory: frontend
         run: npm ci
 
       - name: Install Wails CLI
-        if: steps.check_release.outputs.exists == 'false'
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Wails app (Windows)
-        if: steps.check_release.outputs.exists == 'false'
-        run: |
-          wails build -clean -platform windows/amd64
+        run: wails build -clean -platform windows/amd64
 
       - name: Upload updater to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             build\bin\Void.Presence.Updates.*.exe
+          tag_name: ${{ github.event.client_payload.tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
