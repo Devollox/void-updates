@@ -1,3 +1,4 @@
 frontend/wailsjs/**/* linguist-generated=true
 frontend/**/* linguist-documentation=true
 build/**/* linguist-documentation=true
+build/bin/Void.Presence.Setup*.exe filter=lfs diff=lfs merge=lfs -text
