@@ -11,7 +11,26 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: windows-latest
 
+    permissions:
+      contents: read
+      actions: write
+
     steps:
+      - name: Install GitHub CLI
+        uses: cli/cli-action@v2
+
+      - name: Clear all Actions caches (test)
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Listing caches before delete:"
+          gh cache list || true
+          echo "Deleting all caches..."
+          gh cache delete --all || true
+          echo "Caches after delete (may be empty):"
+          gh cache list || true
+
       - name: Checkout repo
         uses: actions/checkout@v4
 
