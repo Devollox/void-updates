@@ -17,6 +17,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install Git LFS
+        run: git lfs install
+
       - name: Prepare build/bin
         shell: pwsh
         run: |
