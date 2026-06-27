@@ -80,7 +80,7 @@ func buildTitleFromInstaller() string {
             parts := strings.Split(base, ".")
             if len(parts) >= 4 {
                 version := strings.Join(parts[3:], ".")
-                return "Void Presence Updates" + version
+                return "Void Presence Updates " + version
             }
         }
     }
