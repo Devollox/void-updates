@@ -43,6 +43,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          cache: false
 
       - name: Update wails.json outputfilename from installer in repo
         shell: pwsh
