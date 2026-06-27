@@ -94,11 +94,37 @@ jobs:
       - name: Build Wails app (Windows)
         run: wails build -clean -platform windows/amd64
 
-      - name: Upload updater to release
+      - name: Get latest tag of this repo
+        id: latest_tag
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $owner = 'Devollox'
+          $repo  = 'void-updates'
+
+          $headers = @{
+            'Accept'        = 'application/vnd.github+json'
+            'Authorization' = "Bearer $env:GITHUB_TOKEN"
+          }
+
+          $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
+            -Headers $headers
+
+          $tag = $release.tag_name
+          if (-not $tag) {
+            throw "Не удалось получить latest tag для $owner/$repo"
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Upload updater to latest release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             build\bin\Void.Presence.Updates.*.exe
-          tag_name: ${{ github.event.client_payload.tag }}
+          tag_name: ${{ steps.latest_tag.outputs.tag }}
+          overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
