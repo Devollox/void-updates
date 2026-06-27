@@ -1,7 +1,5 @@
 # Wails / frontend build artifacts
-/build/darwin
-/build/windows
-/build/appicon.png
+
 /frontend/build
 /frontend/dist
 
