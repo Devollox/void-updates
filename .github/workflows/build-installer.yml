@@ -13,9 +13,6 @@ jobs:
       actions: write
 
     steps:
-      - name: Install GitHub CLI
-        uses: cli/cli-action@v2
-
       - name: Clear all Actions caches (test)
         shell: bash
         env:
