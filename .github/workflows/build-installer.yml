@@ -77,7 +77,7 @@ jobs:
           $version = ($parts[3..($parts.Length-1)] -join '.')
           "version=$version" | Out-File VERSION -Encoding UTF8
 
-            - name: Commit installer and version
+      - name: Commit installer and version
         shell: bash
         run: |
           git config user.name "${{ github.actor }}"
