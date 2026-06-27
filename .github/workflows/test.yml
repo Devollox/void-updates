@@ -1,10 +1,6 @@
 name: Build and Package Test
 
 on:
-  workflow_run:
-    workflows: ['Download and Commit Installer']
-    types:
-      - completed
   workflow_dispatch:
 
 jobs:
@@ -21,6 +17,13 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # Логи структуры репо сразу после checkout
+      - name: List repo root
+        shell: pwsh
+        run: |
+          Write-Host "=== Repo root ==="
+          Get-ChildItem -Recurse -Depth 2
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -32,10 +35,22 @@ jobs:
           go-version: '1.22'
           cache: false
 
+      # Логи по папке binary и имени инсталлера
+      - name: Inspect binary folder
+        shell: pwsh
+        run: |
+          Write-Host "=== binary folder contents ==="
+          if (Test-Path "binary") {
+            Get-ChildItem -Path "binary"
+          } else {
+            Write-Host "binary folder DOES NOT EXIST"
+          }
+
       - name: Update wails.json outputfilename from installer in repo
         id: parse_version
         shell: pwsh
         run: |
+          Write-Host "=== Searching installer in binary ==="
           $installer = Get-ChildItem -Path "binary" -Filter "Void.Presence.Setup.*.exe" |
             Select-Object -First 1
 
@@ -43,18 +58,29 @@ jobs:
             throw "Не найден Void.Presence.Setup.*.exe в binary (from repo)"
           }
 
+          Write-Host "Found installer:"
+          Write-Host "  FullName: $($installer.FullName)"
+          Write-Host "  Name    : $($installer.Name)"
+
           $name  = $installer.Name
           $base  = [System.IO.Path]::GetFileNameWithoutExtension($name)
           $parts = $base.Split('.')
 
+          Write-Host "  Base    : $base"
+          Write-Host "  Parts   : $($parts -join ', ')"
+
           $version = ($parts[3..($parts.Length-1)] -join '.')
+          Write-Host "Parsed version from installer name: $version"
+
           $wailsPath = "wails.json"
+          Write-Host "Updating $wailsPath outputfilename -> Void.Presence.Updates.$version"
 
           $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
           $config.outputfilename = "Void.Presence.Updates.$version"
 
           $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
 
+          Write-Host "wails.json updated"
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Install frontend dependencies
@@ -65,9 +91,16 @@ jobs:
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Wails app (Windows)
+        shell: pwsh
         run: |
+          Write-Host "=== Building Wails app for Windows ==="
           wails build -clean -platform windows/amd64
-          dir build\bin
+          Write-Host "=== Contents of build\bin after build ==="
+          if (Test-Path "build\bin") {
+            Get-ChildItem -Path "build\bin"
+          } else {
+            Write-Host "build\bin DOES NOT EXIST"
+          }
 
       - name: Read outputfilename from wails.json
         id: wails_name
@@ -81,6 +114,11 @@ jobs:
           }
           $fullPath = "build\bin\$outfile.exe"
           Write-Host "Will upload: $fullPath"
+          if (-not (Test-Path $fullPath)) {
+            Write-Host "ERROR: File not found: $fullPath"
+            Get-ChildItem -Path "build\bin"
+            throw "Updater exe not found"
+          }
           "file=$fullPath" >> $env:GITHUB_OUTPUT
 
       - name: Get latest tag of this repo
@@ -97,6 +135,7 @@ jobs:
             'Authorization' = "Bearer $env:GITHUB_TOKEN"
           }
 
+          Write-Host "Requesting latest release for $owner/$repo"
           $release = Invoke-RestMethod `
             -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
             -Headers $headers
@@ -106,6 +145,7 @@ jobs:
             throw "Не удалось получить latest tag для $owner/$repo"
           }
 
+          Write-Host "Latest release tag: $tag"
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Upload updater to latest release
