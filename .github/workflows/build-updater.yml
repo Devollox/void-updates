@@ -12,24 +12,12 @@ jobs:
     runs-on: windows-latest
 
     permissions:
-      contents: read
+      contents: write
       actions: write
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Clear all Actions caches (test)
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Listing caches before delete:"
-          gh cache list --repo "Devollox/void-updates" || true
-          echo "Deleting all caches..."
-          gh cache delete --repo "Devollox/void-updates" --all || true
-          echo "Caches after delete (may be empty):"
-          gh cache list --repo "Devollox/void-updates" || true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -43,6 +31,7 @@ jobs:
           cache: false
 
       - name: Update wails.json outputfilename from installer in repo
+        id: parse_version
         shell: pwsh
         run: |
           $installer = Get-ChildItem -Path "build/bin" -Filter "Void.Presence.Setup.*.exe" |
@@ -74,6 +63,9 @@ jobs:
 
           Write-Host "wails.json updated"
 
+          # отдадим версию в outputs
+          "version=$version" >> $env:GITHUB_OUTPUT
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
@@ -88,42 +80,12 @@ jobs:
           echo "Build finished. Contents of build/bin:"
           dir build\bin
 
-      - name: Get latest tag of this repo
-        id: latest_tag
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $owner = 'Devollox'
-          $repo  = 'void-updates'
-
-          $headers = @{
-            'Accept'        = 'application/vnd.github+json'
-            'Authorization' = "Bearer $env:GITHUB_TOKEN"
-          }
-
-          Write-Host "Requesting latest release for $owner/$repo"
-          $release = Invoke-RestMethod `
-            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
-            -Headers $headers
-
-          $tag = $release.tag_name
-          if (-not $tag) {
-            throw "Не удалось получить latest tag для $owner/$repo"
-          }
-
-          Write-Host "Latest release of void-updates:"
-          Write-Host "  tag_name: $tag"
-          Write-Host "  name    : $($release.name)"
-
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-
-      - name: Upload updater to latest release
+      - name: Upload updater to release with same tag
         uses: softprops/action-gh-release@v2
         with:
           files: |
             build\bin\Void.Presence.Updates.*.exe
-          tag_name: ${{ steps.latest_tag.outputs.tag }}
+          tag_name: v${{ steps.parse_version.outputs.version }}
           overwrite_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
