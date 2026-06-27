@@ -36,11 +36,11 @@ jobs:
         id: parse_version
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -Path "build/bin" -Filter "Void.Presence.Setup.*.exe" |
+          $installer = Get-ChildItem -Path "binary" -Filter "Void.Presence.Setup.*.exe" |
             Select-Object -First 1
 
           if (-not $installer) {
-            throw "Не найден Void.Presence.Setup.*.exe в build/bin (from repo)"
+            throw "Не найден Void.Presence.Setup.*.exe в binary (from repo)"
           }
 
           $name  = $installer.Name

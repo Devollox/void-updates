@@ -31,12 +31,12 @@ jobs:
       - name: Install Git LFS
         run: git lfs install
 
-      - name: Prepare build/bin
+      - name: Prepare binary
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
-          Get-ChildItem -Path "build/bin" -Filter "*.exe" -File | Remove-Item -Force
-          Write-Host "Cleaned build/bin"
+          New-Item -ItemType Directory -Force -Path "binary" | Out-Null
+          Get-ChildItem -Path "binary" -Filter "*.exe" -File | Remove-Item -Force
+          Write-Host "Cleaned binary"
 
       - name: Download Void Presence installer for tag from payload
         shell: pwsh
@@ -78,9 +78,9 @@ jobs:
           Write-Host "  name: $assetName"
           Write-Host "  url : $downloadUrl"
 
-          New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
+          New-Item -ItemType Directory -Force -Path "binary" | Out-Null
 
-          $outPath = "build/bin/$assetName"
+          $outPath = "binary/$assetName"
           Write-Host "Downloading to $outPath"
           Invoke-WebRequest -Uri $downloadUrl -OutFile $outPath
           Write-Host "Download completed"
@@ -97,7 +97,7 @@ jobs:
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
 
-          git add -f build/bin VERSION
+          git add -f binary VERSION
 
           if git diff --cached --quiet; then
             echo "No changes to commit"
