@@ -63,7 +63,9 @@ func buildTitleFromInstaller() string {
 
     appDir := filepath.Dir(exe)
 
-    entries, err := os.ReadDir(appDir)
+    installerDir := filepath.Join(appDir, "..", "..", "binary")
+
+    entries, err := os.ReadDir(installerDir)
     if err != nil {
         return "Void Presence Updates"
     }

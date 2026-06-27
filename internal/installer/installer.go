@@ -27,29 +27,32 @@ func (i *Installer) Startup(ctx context.Context) {
 }
 
 func (i *Installer) findInstaller() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
+    exe, err := os.Executable()
+    if err != nil {
+        return "", err
+    }
 
-	appDir := filepath.Dir(exe)
-	entries, err := os.ReadDir(appDir)
-	if err != nil {
-		return "", err
-	}
+    appDir := filepath.Dir(exe)
 
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
+    installerDir := filepath.Join(appDir, "..", "..", "binary")
 
-		name := entry.Name()
-		if strings.HasPrefix(name, "Void.Presence.Setup.") && strings.HasSuffix(name, ".exe") {
-			return filepath.Join(appDir, name), nil
-		}
-	}
+    entries, err := os.ReadDir(installerDir)
+    if err != nil {
+        return "", err
+    }
 
-	return "", errors.New("installer not found")
+    for _, entry := range entries {
+        if entry.IsDir() {
+            continue
+        }
+
+        name := entry.Name()
+        if strings.HasPrefix(name, "Void.Presence.Setup.") && strings.HasSuffix(name, ".exe") {
+            return filepath.Join(installerDir, name), nil
+        }
+    }
+
+    return "", errors.New("installer not found")
 }
 
 func isProcessAlive(pid int) bool {
