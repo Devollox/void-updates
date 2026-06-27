@@ -1,26 +1,21 @@
-name: Build and Package Installer
+name: Download and Commit Installer
 
 on:
   repository_dispatch:
     types: [main_repo_updated]
 
 jobs:
-  build:
+  download-and-commit:
     runs-on: windows-latest
 
+    permissions:
+      contents: write
+
     steps:
-      - name: Checkout void-updates code
+      - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
         with:
-          node-version: '22'
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
+          fetch-depth: 0
 
       - name: Prepare build/bin
         shell: pwsh
@@ -75,92 +70,23 @@ jobs:
           Invoke-WebRequest -Uri $downloadUrl -OutFile $outPath
           Write-Host "Download completed"
 
-      - name: Update wails.json outputfilename based on installer version
-        shell: pwsh
-        run: |
-          $installer = Get-ChildItem -Path "build/bin" -Filter "Void.Presence.Setup.*.exe" |
-            Select-Object -First 1
-
-          if (-not $installer) {
-            throw "Не найден Void.Presence.Setup.*.exe в build/bin"
-          }
-
-          $name  = $installer.Name
-          $base  = [System.IO.Path]::GetFileNameWithoutExtension($name)
-          $parts = $base.Split('.')
-
-          Write-Host "Found installer in build/bin:"
-          Write-Host "  file name: $name"
-          Write-Host "  base     : $base"
-          Write-Host "  parts    : $($parts -join ', ')"
-
+          # Save version into VERSION file
+          $base    = [System.IO.Path]::GetFileNameWithoutExtension($assetName)
+          $parts   = $base.Split('.')
           $version = ($parts[3..($parts.Length-1)] -join '.')
-          Write-Host "Parsed version from installer name: $version"
+          "version=$version" | Out-File VERSION -Encoding UTF8
 
-          $wailsPath = "wails.json"
-          Write-Host "Updating $wailsPath outputfilename -> Void.Presence.Updates.$version"
-
-          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
-          $config.outputfilename = "Void.Presence.Updates.$version"
-
-          $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
-
-          Write-Host "wails.json updated"
-
-      - name: Install frontend dependencies
-        working-directory: frontend
+      - name: Commit installer and version
         run: |
-          echo "Installing frontend dependencies (npm ci)"
-          npm ci
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
 
-      - name: Install Wails CLI
-        run: |
-          echo "Installing Wails CLI"
-          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          git add build/bin VERSION
 
-      - name: Build Wails app (Windows)
-        run: |
-          echo "Building Wails app for Windows"
-          wails build -clean -platform windows/amd64
-          echo "Build finished. Contents of build/bin:"
-          dir build\bin
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
 
-      - name: Get latest tag of this repo
-        id: latest_tag
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $owner = 'Devollox'
-          $repo  = 'void-updates'
-
-          $headers = @{
-            'Accept'        = 'application/vnd.github+json'
-            'Authorization' = "Bearer $env:GITHUB_TOKEN"
-          }
-
-          Write-Host "Requesting latest release for $owner/$repo"
-          $release = Invoke-RestMethod `
-            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
-            -Headers $headers
-
-          $tag = $release.tag_name
-          if (-not $tag) {
-            throw "Не удалось получить latest tag для $owner/$repo"
-          }
-
-          Write-Host "Latest release of void-updates:"
-          Write-Host "  tag_name: $tag"
-          Write-Host "  name    : $($release.name)"
-
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-
-      - name: Upload updater to latest release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            build\bin\Void.Presence.Updates.*.exe
-          tag_name: ${{ steps.latest_tag.outputs.tag }}
-          overwrite_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git commit -m "chore: update installer to latest Void Presence"
+          git push

@@ -1,5 +1,6 @@
 # Wails / frontend build artifacts
 
+/build/bin
 /frontend/build
 /frontend/dist
 

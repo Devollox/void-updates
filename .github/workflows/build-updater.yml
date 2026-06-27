@@ -1,0 +1,82 @@
+name: Build and Package Updater
+
+on:
+  workflow_run:
+    workflows: ['Download and Commit Installer']
+    types:
+      - completed
+
+jobs:
+  build-updater:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Update wails.json outputfilename from installer in repo
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path "build/bin" -Filter "Void.Presence.Setup.*.exe" |
+            Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Не найден Void.Presence.Setup.*.exe в build/bin (from repo)"
+          }
+
+          $name  = $installer.Name
+          $base  = [System.IO.Path]::GetFileNameWithoutExtension($name)
+          $parts = $base.Split('.')
+
+          Write-Host "Found installer in build/bin (from repo):"
+          Write-Host "  file name: $name"
+          Write-Host "  base     : $base"
+          Write-Host "  parts    : $($parts -join ', ')"
+
+          $version = ($parts[3..($parts.Length-1)] -join '.')
+          Write-Host "Parsed version from installer name: $version"
+
+          $wailsPath = "wails.json"
+          Write-Host "Updating $wailsPath outputfilename -> Void.Presence.Updates.$version"
+
+          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
+          $config.outputfilename = "Void.Presence.Updates.$version"
+
+          $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
+
+          Write-Host "wails.json updated"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build Wails app (Windows)
+        run: |
+          echo "Building Wails app for Windows"
+          wails build -clean -platform windows/amd64
+          echo "Build finished. Contents of build/bin:"
+          dir build\bin
+
+      - name: Upload updater to latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build\bin\Void.Presence.Updates.*.exe
+          tag_name: v1.0.0
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
