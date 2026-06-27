@@ -63,7 +63,7 @@ func buildTitleFromInstaller() string {
 
     appDir := filepath.Dir(exe)
 
-    installerDir := filepath.Join(appDir, "..", "..", "binary")
+    installerDir := filepath.Join(appDir, "binary")
 
     entries, err := os.ReadDir(installerDir)
     if err != nil {

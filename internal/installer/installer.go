@@ -34,7 +34,7 @@ func (i *Installer) findInstaller() (string, error) {
 
     appDir := filepath.Dir(exe)
 
-    installerDir := filepath.Join(appDir, "..", "..", "binary")
+    installerDir := filepath.Join(appDir, "binary")
 
     entries, err := os.ReadDir(installerDir)
     if err != nil {
