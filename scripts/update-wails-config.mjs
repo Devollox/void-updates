@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-const buildBinDir = path.join('build', 'bin')
+const buildBinDir = path.join('binary')
 
 const files = fs.readdirSync(buildBinDir)
 const setupFile = files.find(
