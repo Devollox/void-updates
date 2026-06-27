@@ -27,6 +27,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
           Get-ChildItem -Path "build/bin" -Filter "*.exe" -File | Remove-Item -Force
+          Write-Host "Cleaned build/bin"
 
       - name: Download latest Void Presence installer
         shell: pwsh
@@ -41,21 +42,38 @@ jobs:
             'Authorization' = "Bearer $env:GITHUB_TOKEN"
           }
 
+          Write-Host "Requesting latest release for $owner/$repo"
           $release = Invoke-RestMethod `
             -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
             -Headers $headers
+
+          Write-Host "Latest release:"
+          Write-Host "  tag_name: $($release.tag_name)"
+          Write-Host "  name    : $($release.name)"
 
           $asset = $release.assets |
             Where-Object { $_.name -like 'Void.Presence.Setup.*.exe' } |
             Select-Object -First 1
 
+          if (-not $asset) {
+            Write-Host "Assets in latest release:"
+            $release.assets | ForEach-Object { Write-Host "  - $($_.name)" }
+            throw "Void.Presence.Setup.*.exe not found in latest void-presence release"
+          }
+
           $assetName   = $asset.name
           $downloadUrl = $asset.browser_download_url
+
+          Write-Host "Selected asset:"
+          Write-Host "  name: $assetName"
+          Write-Host "  url : $downloadUrl"
 
           New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
 
           $outPath = "build/bin/$assetName"
+          Write-Host "Downloading to $outPath"
           Invoke-WebRequest -Uri $downloadUrl -OutFile $outPath
+          Write-Host "Download completed"
 
       - name: Update wails.json outputfilename based on installer version
         shell: pwsh
@@ -67,27 +85,45 @@ jobs:
             throw "Не найден Void.Presence.Setup.*.exe в build/bin"
           }
 
-          $name    = $installer.Name
-          $base    = [System.IO.Path]::GetFileNameWithoutExtension($name)
-          $parts   = $base.Split('.')
+          $name  = $installer.Name
+          $base  = [System.IO.Path]::GetFileNameWithoutExtension($name)
+          $parts = $base.Split('.')
+
+          Write-Host "Found installer in build/bin:"
+          Write-Host "  file name: $name"
+          Write-Host "  base     : $base"
+          Write-Host "  parts    : $($parts -join ', ')"
+
           $version = ($parts[3..($parts.Length-1)] -join '.')
+          Write-Host "Parsed version from installer name: $version"
 
           $wailsPath = "wails.json"
-          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
+          Write-Host "Updating $wailsPath outputfilename -> Void.Presence.Updates.$version"
 
+          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
           $config.outputfilename = "Void.Presence.Updates.$version"
 
           $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
 
+          Write-Host "wails.json updated"
+
       - name: Install frontend dependencies
         working-directory: frontend
-        run: npm ci
+        run: |
+          echo "Installing frontend dependencies (npm ci)"
+          npm ci
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: |
+          echo "Installing Wails CLI"
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Wails app (Windows)
-        run: wails build -clean -platform windows/amd64
+        run: |
+          echo "Building Wails app for Windows"
+          wails build -clean -platform windows/amd64
+          echo "Build finished. Contents of build/bin:"
+          dir build\bin
 
       - name: Get latest tag of this repo
         id: latest_tag
@@ -103,6 +139,7 @@ jobs:
             'Authorization' = "Bearer $env:GITHUB_TOKEN"
           }
 
+          Write-Host "Requesting latest release for $owner/$repo"
           $release = Invoke-RestMethod `
             -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
             -Headers $headers
@@ -111,6 +148,10 @@ jobs:
           if (-not $tag) {
             throw "Не удалось получить latest tag для $owner/$repo"
           }
+
+          Write-Host "Latest release of void-updates:"
+          Write-Host "  tag_name: $tag"
+          Write-Host "  name    : $($release.name)"
 
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
