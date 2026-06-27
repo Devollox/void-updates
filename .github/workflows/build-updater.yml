@@ -71,7 +71,7 @@ jobs:
           echo "Build finished. Contents of build/bin:"
           dir build\bin
 
-            - name: Get latest tag of this repo
+      - name: Get latest tag of this repo
         id: latest_tag
         shell: pwsh
         env:

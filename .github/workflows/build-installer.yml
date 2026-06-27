@@ -47,6 +47,36 @@ jobs:
             -Uri "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" `
             -Headers $headers
 
+          $asset = $release.assets |
+            Where-Object { $_.name -like 'Void.Presence.Setup.*.exe' } |
+            Select-Object -First 1
+
+          if (-not $asset) {
+            Write-Host "Assets in release:"
+            $release.assets | ForEach-Object { Write-Host "  - $($_.name)" }
+            throw "Void.Presence.Setup.*.exe not found in release $tag"
+          }
+
+          $assetName   = $asset.name
+          $downloadUrl = $asset.browser_download_url
+
+          Write-Host "Selected asset:"
+          Write-Host "  name: $assetName"
+          Write-Host "  url : $downloadUrl"
+
+          New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
+
+          $outPath = "build/bin/$assetName"
+          Write-Host "Downloading to $outPath"
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $outPath
+          Write-Host "Download completed"
+
+          # Save version into VERSION file
+          $base    = [System.IO.Path]::GetFileNameWithoutExtension($assetName)
+          $parts   = $base.Split('.')
+          $version = ($parts[3..($parts.Length-1)] -join '.')
+          "version=$version" | Out-File VERSION -Encoding UTF8
+
       - name: Commit installer and version
         shell: bash
         run: |
