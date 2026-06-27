@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"os"
 	"os/exec"
@@ -14,47 +15,58 @@ import (
 )
 
 type Installer struct {
-	ctx     context.Context
-	started bool
+	ctx          context.Context
+	started      bool
+	binaryFolder embed.FS
 }
 
-func NewInstaller() *Installer {
-	return &Installer{}
+func NewInstaller(binaryFolder embed.FS) *Installer {
+	return &Installer{
+		binaryFolder: binaryFolder,
+	}
 }
 
 func (i *Installer) Startup(ctx context.Context) {
 	i.ctx = ctx
 }
 
-func (i *Installer) findInstaller() (string, error) {
-    exe, err := os.Executable()
-    if err != nil {
-        return "", err
-    }
+func (i *Installer) extractInstaller() (string, error) {
+	entries, err := i.binaryFolder.ReadDir("binary")
+	if err != nil {
+		return "", err
+	}
 
-    appDir := filepath.Dir(exe)
+	var targetName string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasPrefix(name, "Void.Presence.Setup.") && strings.HasSuffix(name, ".exe") {
+			targetName = name
+			break
+		}
+	}
 
+	if targetName == "" {
+		return "", errors.New("installer not found in embedded assets")
+	}
 
-    installerDir := filepath.Join(appDir, "..", "..", "binary")
-    installerDir, _ = filepath.Abs(installerDir)
+	embeddedPath := "binary/" + targetName
+	data, err := i.binaryFolder.ReadFile(embeddedPath)
+	if err != nil {
+		return "", err
+	}
 
-    entries, err := os.ReadDir(installerDir)
-    if err != nil {
-        return "", err
-    }
+	tempDir := os.TempDir()
+	extractedPath := filepath.Join(tempDir, targetName)
 
-    for _, entry := range entries {
-        if entry.IsDir() {
-            continue
-        }
+	err = os.WriteFile(extractedPath, data, 0755)
+	if err != nil {
+		return "", err
+	}
 
-        name := entry.Name()
-        if strings.HasPrefix(name, "Void.Presence.Setup.") && strings.HasSuffix(name, ".exe") {
-            return filepath.Join(installerDir, name), nil
-        }
-    }
-
-    return "", errors.New("installer not found")
+	return extractedPath, nil
 }
 
 func isProcessAlive(pid int) bool {
@@ -114,9 +126,9 @@ func (i *Installer) RunBundledInstaller() error {
 
 	runtime.EventsEmit(i.ctx, "install:progressText", "Launching installer...")
 
-	installerPath, err := i.findInstaller()
+	installerPath, err := i.extractInstaller()
 	if err != nil {
-		runtime.EventsEmit(i.ctx, "install:progressText", "Installer not found")
+		runtime.EventsEmit(i.ctx, "install:progressText", "Installer extraction failed")
 		return err
 	}
 
@@ -126,6 +138,7 @@ func (i *Installer) RunBundledInstaller() error {
 
 	if err := cmd.Start(); err != nil {
 		runtime.EventsEmit(i.ctx, "install:progressText", "Failed to launch installer")
+		_ = os.Remove(installerPath)
 		return err
 	}
 
@@ -133,18 +146,18 @@ func (i *Installer) RunBundledInstaller() error {
 
 	runtime.EventsEmit(i.ctx, "install:progressText", "Installer started")
 
-	go func(pid int) {
+	go func(pid int, tempFile string) {
 		for {
 			if !isProcessAlive(pid) {
 				runtime.EventsEmit(i.ctx, "install:progressText", "Installer finished")
-
 				_ = i.RunInstalledApp()
+				_ = os.Remove(tempFile)
 				runtime.Quit(i.ctx)
 				return
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
-	}(pid)
+	}(pid, installerPath)
 
 	return nil
 }
