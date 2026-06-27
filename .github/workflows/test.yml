@@ -1,4 +1,4 @@
-name: Build and Package Updater
+name: Build and Package Test
 
 on:
   workflow_run:
@@ -69,6 +69,20 @@ jobs:
           wails build -clean -platform windows/amd64
           dir build\bin
 
+      - name: Read outputfilename from wails.json
+        id: wails_name
+        shell: pwsh
+        run: |
+          $wailsPath = "wails.json"
+          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
+          $outfile = $config.outputfilename
+          if (-not $outfile) {
+            throw "outputfilename пустой в wails.json"
+          }
+          $fullPath = "build\bin\$outfile.exe"
+          Write-Host "Will upload: $fullPath"
+          "file=$fullPath" >> $env:GITHUB_OUTPUT
+
       - name: Get latest tag of this repo
         id: latest_tag
         shell: pwsh
@@ -97,8 +111,7 @@ jobs:
       - name: Upload updater to latest release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            build\bin\Void.Presence.Updates.*.exe
+          files: ${{ steps.wails_name.outputs.file }}
           tag_name: ${{ steps.latest_tag.outputs.tag }}
           overwrite_files: true
         env:
