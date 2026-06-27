@@ -1,0 +1,38 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check if release already exists for this tag
+        id: check_release
+        shell: bash
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout code
+        if: steps.check_release.outputs.exists == 'false'
+        uses: actions/checkout@v4
+
+      - name: Setup
+
+      - name: Update release description from RELEASE_NOTES.md
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          gh release edit ${{ github.ref_name }} --notes-file RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

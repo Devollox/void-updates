@@ -12,3 +12,80 @@ jobs:
       - name: Checkout void-updates code
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Prepare build/bin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
+          Get-ChildItem -Path "build/bin" -Filter "*.exe" -File | Remove-Item -Force
+
+      - name: Download latest Void Presence installer
+        shell: pwsh
+        run: |
+          $owner = 'Devollox'
+          $repo  = 'void-presence'
+
+          $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
+            -Headers @{ 'Accept' = 'application/vnd.github+json' }
+
+          $asset = $release.assets |
+            Where-Object { $_.name -like 'Void.Presence.Setup.*.exe' } |
+            Select-Object -First 1
+
+          if (-not $asset) {
+            throw "Не найден asset Void.Presence.Setup.*.exe в последнем релизе."
+          }
+
+          $assetName = $asset.name
+          $downloadUrl = $asset.browser_download_url
+
+          New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
+
+          $outPath = "build/bin/$assetName"
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $outPath
+
+      - name: Update wails.json outputfilename based on installer version
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path "build/bin" -Filter "Void.Presence.Setup.*.exe" |
+            Select-Object -First 1
+
+          if (-not $installer) {
+            throw "Не найден Void.Presence.Setup.*.exe в build/bin"
+          }
+
+          $name = $installer.Name
+          $base = [System.IO.Path]::GetFileNameWithoutExtension($name)
+          $parts = $base.Split('.')
+          $version = ($parts[3..($parts.Length-1)] -join '.')
+
+          $wailsPath = "wails.json"
+          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
+
+          $config.outputfilename = "Void.Presence.Updates.$version"
+
+          $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build Wails app
+        run: wails build -clean
+
+      - name: Upload updater to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build\bin\Void.Presence.Updates.*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,235 @@
+:root {
+	--bg: #050505;
+	--panel: rgba(255, 255, 255, 0.02);
+	--panel-soft: rgba(255, 255, 255, 0.015);
+	--accent: #ffffff;
+	--accent-soft: rgba(255, 255, 255, 0.08);
+	--text: #f3f3f3;
+	--muted: rgba(255, 255, 255, 0.56);
+	--danger: #ff5a5a;
+	--border: rgba(255, 255, 255, 0.08);
+	--border-soft: rgba(255, 255, 255, 0.04);
+	--radius: 0.9rem;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+
+html {
+	background:
+		radial-gradient(circle at top, rgba(255, 255, 255, 0.03), transparent 28%),
+		linear-gradient(180deg, #070707 0%, #040404 100%);
+	color: var(--text);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	overflow: hidden;
+}
+
+body {
+	margin: 0;
+	font-family:
+		system-ui,
+		-apple-system,
+		BlinkMacSystemFont,
+		'Segoe UI',
+		sans-serif;
+	font-size: 13px;
+	letter-spacing: -0.01em;
+}
+
+.AppRoot {
+	background: rgba(255, 255, 255, 0.015);
+	width: 100vw;
+	height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.installer-shell {
+	width: 100%;
+	height: 100%;
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.05),
+		0 20px 70px rgba(0, 0, 0, 0.9);
+	padding: 0 0 0 0;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Header */
+
+.header-row {
+	z-index: 80;
+	height: 44px;
+	padding: 0 18px;
+	display: flex;
+	align-items: center;
+	--wails-draggable: drag;
+}
+
+.header-content {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	user-select: none;
+}
+
+.header-right-side {
+	display: flex;
+	align-items: center;
+	--wails-draggable: no-drag;
+}
+
+.brand-inline {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.brand-logo {
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 13px;
+	font-weight: 600;
+	background: rgba(255, 255, 255, 0.02);
+	flex-shrink: 0;
+}
+
+.brand-text {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	line-height: 1;
+}
+
+.brand-main {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
+	color: #ffffff;
+	line-height: 1;
+	align-items: start;
+	display: flex;
+}
+
+.brand-sub {
+	margin-top: 1px;
+	font-size: 7px;
+	font-weight: 600;
+	letter-spacing: 0.34em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.48);
+	line-height: 1;
+}
+
+/* Window controls */
+
+.window-controls {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 12px;
+	--wails-draggable: no-drag;
+}
+
+.win-btn {
+	width: 22px;
+	height: 22px;
+	border-radius: 999px;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	background: rgba(255, 255, 255, 0.02);
+	color: #f3f3f3;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition:
+		background-color 0.12s ease,
+		border-color 0.12s ease,
+		color 0.12s ease,
+		transform 0.1s ease;
+}
+
+.win-btn:hover {
+	background: #ffffff;
+	color: #000000;
+	border-color: #ffffff;
+	transform: translateY(-0.5px);
+}
+
+.win-btn:active {
+	transform: translateY(0.5px) scale(0.97);
+}
+
+/* Progress panel */
+
+.wrapper-block-progress {
+	width: 100%;
+	position: absolute;
+	margin-top: 30px;
+}
+
+.progress-block {
+	margin-left: 40px;
+	width: 400px;
+	position: absolute;
+	margin-bottom: 12px;
+}
+
+.progress-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	font-size: 9px;
+	font-weight: 600;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.68);
+	margin-bottom: 6px;
+}
+
+.progress-percent {
+	color: rgba(255, 255, 255, 0.82);
+}
+
+.progress-bar {
+	width: 100%;
+	height: 7px;
+	border-radius: 999px;
+	background: rgba(255, 255, 255, 0.06);
+	overflow: hidden;
+	margin-bottom: 6px;
+}
+
+.progress-fill {
+	height: 100%;
+	width: 0%;
+	border-radius: 999px;
+	background: linear-gradient(90deg, #ffffff, #22c55e);
+	transition: width 0.22s ease-out;
+}
+
+.progress-label {
+	font-size: 10px;
+	color: rgba(255, 255, 255, 0.7);
+}

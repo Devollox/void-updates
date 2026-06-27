@@ -1,0 +1,15 @@
+# Wails / frontend build artifacts
+/build/darwin
+/build/windows
+/build/appicon.png
+/frontend/build
+/frontend/dist
+
+# Node / frontend deps
+/node_modules
+/frontend/node_modules
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
