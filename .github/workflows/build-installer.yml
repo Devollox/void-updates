@@ -80,10 +80,18 @@ jobs:
           $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
 
       - name: Install frontend dependencies
-        run: npm install
+        if: steps.check_release.outputs.exists == 'false'
+        working-directory: frontend
+        run: npm ci
 
-      - name: Build Wails app
-        run: wails build -clean
+      - name: Install Wails CLI
+        if: steps.check_release.outputs.exists == 'false'
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build Wails app (Windows)
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          wails build -clean -platform windows/amd64
 
       - name: Upload updater to release
         uses: softprops/action-gh-release@v2
