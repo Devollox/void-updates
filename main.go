@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"embed"
-	"io"
 	"log"
 	"os"
+  "io"
 	"path/filepath"
 
 	"local/void-updates/internal/installer"
@@ -17,6 +17,9 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+//go:embed binary/*
+var binaryFolder embed.FS
 
 func initLogging() {
 	exe, _ := os.Executable()
@@ -57,17 +60,17 @@ func main() {
 	log.Printf("main: creating app & installer")
 
 	app := NewApp()
-	inst := installer.NewInstaller()
+	inst := installer.NewInstaller(binaryFolder)
 	title := "Void Presence Updates"
 
 	log.Printf("main: starting Wails app with title %q", title)
 
 	err := wails.Run(&options.App{
-		Title:             title,
-		Width:             480,
-		Height:            148,
-		Frameless:         true,
-		DisableResize:     true,
+		Title:         title,
+		Width:         480,
+		Height:        148,
+		Frameless:     true,
+		DisableResize: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

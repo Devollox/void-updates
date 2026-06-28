@@ -1,13 +1,13 @@
-name: Download and Commit Installer
+name: Build and Package Test
 
 on:
+  workflow_dispatch:
   repository_dispatch:
     types: [main_repo_updated]
 
 jobs:
-  download-and-commit:
+  build-updater:
     runs-on: windows-latest
-
     permissions:
       contents: write
       actions: write
@@ -16,20 +16,22 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Clear all Actions caches (test)
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: List repo root
+        shell: pwsh
         run: |
-          echo "Listing caches before delete:"
-          gh cache list --repo "Devollox/void-updates" || true
-          echo "Deleting all caches..."
-          gh cache delete --repo "Devollox/void-updates" --all || true
-          echo "Caches after delete (may be empty):"
-          gh cache list --repo "Devollox/void-updates" || true
+          Write-Host "=== Repo root ==="
+          Get-ChildItem -Recurse -Depth 2
 
-      - name: Install Git LFS
-        run: git lfs install
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
 
       - name: Prepare binary
         shell: pwsh
@@ -38,28 +40,34 @@ jobs:
           Get-ChildItem -Path "binary" -Filter "*.exe" -File | Remove-Item -Force
           Write-Host "Cleaned binary"
 
-      - name: Download Void Presence installer for tag from payload
+      - name: Download Void Presence setup from payload tag or latest
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $owner = 'Devollox'
           $repo  = 'void-presence'
-          $tag   = "${{ github.event.client_payload.tag }}"
-
-          if (-not $tag) {
-            throw "client_payload.tag is empty"
-          }
+          $payloadTag = "${{ github.event.client_payload.tag }}"
 
           $headers = @{
             'Accept'        = 'application/vnd.github+json'
             'Authorization' = "Bearer $env:GITHUB_TOKEN"
           }
 
-          Write-Host "Requesting release for $owner/$repo tag $tag"
-          $release = Invoke-RestMethod `
-            -Uri "https://api.github.com/repos/$owner/$repo/releases/tags/$tag" `
-            -Headers $headers
+          if ($payloadTag) {
+            Write-Host "Using tag from client_payload: $payloadTag"
+            $release = Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$owner/$repo/releases/tags/$payloadTag" `
+              -Headers $headers
+          } else {
+            Write-Host "No payload tag found, using latest release"
+            $release = Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
+              -Headers $headers
+          }
+
+          $tag = $release.tag_name
+          Write-Host "Selected release tag in void-presence: $tag"
 
           $asset = $release.assets |
             Where-Object { $_.name -like 'Void.Presence.Setup.*.exe' } |
@@ -80,29 +88,141 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path "binary" | Out-Null
 
-          $outPath = "binary/$assetName"
-          Write-Host "Downloading to $outPath"
-          Invoke-WebRequest -Uri $downloadUrl -OutFile $outPath
+          $outExe = "binary/$assetName"
+          Write-Host "Downloading exe to $outExe"
+          Invoke-WebRequest -Uri $downloadUrl -OutFile $outExe
           Write-Host "Download completed"
 
-          # Save version into VERSION file
-          $base    = [System.IO.Path]::GetFileNameWithoutExtension($assetName)
-          $parts   = $base.Split('.')
-          $version = ($parts[3..($parts.Length-1)] -join '.')
-          "version=$version" | Out-File VERSION -Encoding UTF8
-
-      - name: Commit installer and version
-        shell: bash
+      - name: Inspect binary folder
+        shell: pwsh
         run: |
-          git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          Write-Host "=== binary folder contents ==="
+          if (Test-Path "binary") {
+            Get-ChildItem -Path "binary"
+          } else {
+            Write-Host "binary folder DOES NOT EXIST"
+          }
 
-          git add -f binary VERSION
+      - name: Update wails.json outputfilename from installer in binary
+        id: parse_version
+        shell: pwsh
+        run: |
+          Write-Host "=== Searching installer in binary ==="
+          $installer = Get-ChildItem -Path "binary" -Filter "Void.Presence.Setup.*.exe" |
+            Select-Object -First 1
 
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
+          if (-not $installer) {
+            throw "Не найден Void.Presence.Setup.*.exe в binary"
+          }
 
-          git commit -m "chore: update installer to latest Void Presence"
-          git push
+          Write-Host "Found installer:"
+          Write-Host "  FullName: $($installer.FullName)"
+          Write-Host "  Name    : $($installer.Name)"
+
+          $name  = $installer.Name
+          $base  = [System.IO.Path]::GetFileNameWithoutExtension($name)
+          $parts = $base.Split('.')
+
+          Write-Host "  Base    : $base"
+          Write-Host "  Parts   : $($parts -join ', ')"
+
+          $version = ($parts[3..($parts.Length-1)] -join '.')
+          Write-Host "Parsed version from installer name: $version"
+
+          $wailsPath = "wails.json"
+          Write-Host "Updating $wailsPath outputfilename -> Void.Presence.Updates.$version"
+
+          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
+          $config.outputfilename = "Void.Presence.Updates.$version"
+
+          $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
+
+          Write-Host "wails.json updated"
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build Wails app (Windows)
+        shell: pwsh
+        run: |
+          Write-Host "=== Building Wails app for Windows ==="
+          wails build -clean -platform windows/amd64
+          Write-Host "=== Contents of build\bin after build ==="
+          if (Test-Path "build\bin") {
+            Get-ChildItem -Path "build\bin"
+          } else {
+            Write-Host "build\bin DOES NOT EXIST"
+          }
+
+      - name: Read outputfilename from wails.json
+        id: wails_name
+        shell: pwsh
+        run: |
+          $wailsPath = "wails.json"
+          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
+          $outfile = $config.outputfilename
+          if (-not $outfile) {
+            throw "outputfilename пустой в wails.json"
+          }
+          $fullPath = "build\bin\$outfile.exe"
+          Write-Host "Will upload: $fullPath"
+          if (-not (Test-Path $fullPath)) {
+            Write-Host "ERROR: File not found: $fullPath"
+            Get-ChildItem -Path "build\bin"
+            throw "Updater exe not found"
+          }
+          "file=$fullPath" >> $env:GITHUB_OUTPUT
+
+      - name: Get latest tag of this repo
+        id: latest_tag
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $owner = 'Devollox'
+          $repo  = 'void-updates'
+
+          $headers = @{
+            'Accept'        = 'application/vnd.github+json'
+            'Authorization' = "Bearer $env:GITHUB_TOKEN"
+          }
+
+          Write-Host "Requesting latest release for $owner/$repo"
+          $release = Invoke-RestMethod `
+            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
+            -Headers $headers
+
+          $tag = $release.tag_name
+          if (-not $tag) {
+            throw "Не удалось получить latest tag для $owner/$repo"
+          }
+
+          Write-Host "Latest release tag: $tag"
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Upload updater to latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.wails_name.outputs.file }}
+          tag_name: ${{ steps.latest_tag.outputs.tag }}
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Trigger void-presence repo
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.UPDATER_TOKEN }}
+          repository: Devollox/void-presence
+          event-type: repo_binary_updates
+          client-payload: >-
+            {
+              "source_tag": "${{ github.event.client_payload.tag }}",
+              "updates_tag": "${{ steps.latest_tag.outputs.tag }}",
+              "updates_sha": "${{ github.sha }}"
+            }

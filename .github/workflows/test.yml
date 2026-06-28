@@ -31,12 +31,12 @@ jobs:
           go-version: '1.22'
           cache: false
 
-      - name: Prepare build/bin
+      - name: Prepare binary
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
-          Get-ChildItem -Path "build/bin" -Filter "*.exe" -File | Remove-Item -Force
-          Write-Host "Cleaned build/bin"
+          New-Item -ItemType Directory -Force -Path "binary" | Out-Null
+          Get-ChildItem -Path "binary" -Filter "*.exe" -File | Remove-Item -Force
+          Write-Host "Cleaned binary"
 
       - name: Download latest Void Presence setup from release
         shell: pwsh
@@ -76,33 +76,33 @@ jobs:
           Write-Host "  name: $assetName"
           Write-Host "  url : $downloadUrl"
 
-          New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
+          New-Item -ItemType Directory -Force -Path "binary" | Out-Null
 
-          $outExe = "build/bin/$assetName"
+          $outExe = "binary/$assetName"
           Write-Host "Downloading exe to $outExe"
           Invoke-WebRequest -Uri $downloadUrl -OutFile $outExe
           Write-Host "Download completed"
 
-      - name: Inspect build/bin folder
+      - name: Inspect binary folder
         shell: pwsh
         run: |
-          Write-Host "=== build/bin folder contents ==="
-          if (Test-Path "build/bin") {
-            Get-ChildItem -Path "build/bin"
+          Write-Host "=== binary folder contents ==="
+          if (Test-Path "binary") {
+            Get-ChildItem -Path "binary"
           } else {
-            Write-Host "build/bin folder DOES NOT EXIST"
+            Write-Host "binary folder DOES NOT EXIST"
           }
 
       - name: Update wails.json outputfilename from installer in repo
         id: parse_version
         shell: pwsh
         run: |
-          Write-Host "=== Searching installer in build/bin ==="
-          $installer = Get-ChildItem -Path "build/bin" -Filter "Void.Presence.Setup.*.exe" |
+          Write-Host "=== Searching installer in binary ==="
+          $installer = Get-ChildItem -Path "binary" -Filter "Void.Presence.Setup.*.exe" |
             Select-Object -First 1
 
           if (-not $installer) {
-            throw "Не найден Void.Presence.Setup.*.exe в build/bin (from repo)"
+            throw "Не найден Void.Presence.Setup.*.exe в binary (from repo)"
           }
 
           Write-Host "Found installer:"
