@@ -140,6 +140,9 @@ jobs:
           Write-Host "wails.json updated"
           "version=$version" >> $env:GITHUB_OUTPUT
 
+      - name: Run version synchronization
+        run: node scripts/sync-version.js
+
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
