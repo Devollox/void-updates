@@ -172,6 +172,14 @@ func (i *Installer) RunBundledInstaller() error {
 
 	runtime.LogInfof(i.ctx, "RunBundledInstaller: installerPath = %s", installerPath)
 
+  kill := exec.Command("taskkill", "/IM", "Void Presence.exe", "/T", "/F")
+  kill.SysProcAttr = &syscall.SysProcAttr{
+    HideWindow:    true,
+    CreationFlags: 0x08000000,
+  }
+  _ = kill.Run()
+
+
 	appDir := filepath.Dir(installerPath)
 	runtime.LogInfof(i.ctx, "RunBundledInstaller: appDir = %s", appDir)
 
