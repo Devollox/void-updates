@@ -1,5 +1,5 @@
-# Process-Safe Installer Update
+# Missing Import
 
-## Improvements
+## Bug Fixes
 
-- **Force-close running client before update** — the installer now terminates all running `Void Presence.exe` processes via `taskkill` before launching the NSIS installer, preventing file lock errors and half-applied updates.
+- Added the missing `syscall` import in the installer module so the Windows update flow compiles correctly again.
