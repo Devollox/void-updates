@@ -1,5 +1,5 @@
-# Missing Import
+# Post-Install Cleanup
 
 ## Bug Fixes
 
-- Added the missing `syscall` import in the installer module so the Windows update flow compiles correctly again.
+- **Automatic installer cleanup on Windows** — after Void Presence finishes installing, the bundled Windows installer now removes its temporary setup binary and clears update/cache directories under AppData, so updater runs no longer leave behind stray files.

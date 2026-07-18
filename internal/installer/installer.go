@@ -148,6 +148,52 @@ func (i *Installer) RunInstalledApp() error {
 	return nil
 }
 
+func (i *Installer) cleanupAfterInstall(tempFile string) {
+  if i.ctx == nil {
+    return
+  }
+
+  runtime.LogInfo(i.ctx, "cleanupAfterInstall: start")
+
+  if tempFile != "" {
+    if err := os.Remove(tempFile); err != nil && !os.IsNotExist(err) {
+      runtime.LogErrorf(i.ctx, "cleanupAfterInstall: Remove(tempFile) error: %v", err)
+    } else {
+      runtime.LogInfof(i.ctx, "cleanupAfterInstall: removed temp file %s", tempFile)
+    }
+  }
+
+  appDataRoaming := os.Getenv("APPDATA")
+  if appDataRoaming != "" {
+    updatesDir := filepath.Join(appDataRoaming, "VoidPresence", "Updates")
+    runtime.LogInfof(i.ctx, "cleanupAfterInstall: updatesDir = %s", updatesDir)
+
+    if err := os.RemoveAll(updatesDir); err != nil && !os.IsNotExist(err) {
+      runtime.LogErrorf(i.ctx, "cleanupAfterInstall: RemoveAll(updatesDir) error: %v", err)
+    } else {
+      runtime.LogInfo(i.ctx, "cleanupAfterInstall: updatesDir removed or did not exist")
+    }
+  } else {
+    runtime.LogInfo(i.ctx, "cleanupAfterInstall: APPDATA not set, skipping roaming cleanup")
+  }
+
+  localAppData := os.Getenv("LOCALAPPDATA")
+  if localAppData != "" {
+    installerCacheDir := filepath.Join(localAppData, "VoidPresence", "InstallerCache")
+    runtime.LogInfof(i.ctx, "cleanupAfterInstall: installerCacheDir = %s", installerCacheDir)
+
+    if err := os.RemoveAll(installerCacheDir); err != nil && !os.IsNotExist(err) {
+      runtime.LogErrorf(i.ctx, "cleanupAfterInstall: RemoveAll(installerCacheDir) error: %v", err)
+    } else {
+      runtime.LogInfo(i.ctx, "cleanupAfterInstall: installerCacheDir removed or did not exist")
+    }
+  } else {
+    runtime.LogInfo(i.ctx, "cleanupAfterInstall: LOCALAPPDATA not set, skipping local cleanup")
+  }
+
+  runtime.LogInfo(i.ctx, "cleanupAfterInstall: done")
+}
+
 func (i *Installer) RunBundledInstaller() error {
 	if i.ctx == nil {
 		return errors.New("no context")
@@ -205,8 +251,8 @@ func (i *Installer) RunBundledInstaller() error {
 			if !isProcessAlive(pid) {
 				runtime.LogInfo(i.ctx, "RunBundledInstaller: installer finished")
 				runtime.EventsEmit(i.ctx, "install:progressText", "Installer finished")
+				i.cleanupAfterInstall(tempFile)
 				_ = i.RunInstalledApp()
-				_ = os.Remove(tempFile)
 				runtime.LogInfof(i.ctx, "RunBundledInstaller: removed temp file %s", tempFile)
 				runtime.Quit(i.ctx)
 				return
