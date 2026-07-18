@@ -177,14 +177,14 @@ func (i *Installer) cleanupAfterInstall(tempFile string) {
           continue
         }
         name := entry.Name()
-        if strings.HasPrefix(name, setupPrefix) && strings.HasSuffix(name, ".exe") {
+        if strings.HasPrefix(name, setupPrefix) && strings.Contains(name, ".exe") {
           dirPath := filepath.Join(appDataRoaming, name)
           runtime.LogInfof(i.ctx, "cleanupAfterInstall: removing setup dir %s", dirPath)
           if err := os.RemoveAll(dirPath); err != nil && !os.IsNotExist(err) {
             runtime.LogErrorf(i.ctx, "cleanupAfterInstall: RemoveAll(setup dir) error: %v", err)
           }
         }
-        if strings.HasPrefix(name, updatesPrefix) && strings.HasSuffix(name, ".exe") {
+        if strings.HasPrefix(name, updatesPrefix) && strings.Contains(name, ".exe") {
           dirPath := filepath.Join(appDataRoaming, name)
           runtime.LogInfof(i.ctx, "cleanupAfterInstall: removing updates dir %s", dirPath)
           if err := os.RemoveAll(dirPath); err != nil && !os.IsNotExist(err) {
