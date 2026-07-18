@@ -173,22 +173,12 @@ func (i *Installer) cleanupAfterInstall(tempFile string) {
       runtime.LogErrorf(i.ctx, "cleanupAfterInstall: ReadDir(APPDATA) error: %v", err)
     } else {
       for _, entry := range entries {
-        if !entry.IsDir() {
-          continue
-        }
         name := entry.Name()
-        if strings.HasPrefix(name, setupPrefix) && strings.Contains(name, ".exe") {
-          dirPath := filepath.Join(appDataRoaming, name)
-          runtime.LogInfof(i.ctx, "cleanupAfterInstall: removing setup dir %s", dirPath)
-          if err := os.RemoveAll(dirPath); err != nil && !os.IsNotExist(err) {
-            runtime.LogErrorf(i.ctx, "cleanupAfterInstall: RemoveAll(setup dir) error: %v", err)
-          }
-        }
-        if strings.HasPrefix(name, updatesPrefix) && strings.Contains(name, ".exe") {
-          dirPath := filepath.Join(appDataRoaming, name)
-          runtime.LogInfof(i.ctx, "cleanupAfterInstall: removing updates dir %s", dirPath)
-          if err := os.RemoveAll(dirPath); err != nil && !os.IsNotExist(err) {
-            runtime.LogErrorf(i.ctx, "cleanupAfterInstall: RemoveAll(updates dir) error: %v", err)
+        if strings.HasPrefix(name, setupPrefix) || strings.HasPrefix(name, updatesPrefix) {
+          path := filepath.Join(appDataRoaming, name)
+          runtime.LogInfof(i.ctx, "cleanupAfterInstall: removing %s", path)
+          if err := os.RemoveAll(path); err != nil && !os.IsNotExist(err) {
+            runtime.LogErrorf(i.ctx, "cleanupAfterInstall: RemoveAll(%s) error: %v", path, err)
           }
         }
       }
