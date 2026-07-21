@@ -181,14 +181,11 @@ jobs:
           APP=$(ls build/bin/*.app 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
             ls build/bin/
-            echo "No .app found, checking for raw binary"
-            BIN=$(ls build/bin/ | head -1)
-            ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
-            zip -j "$ZIP" "build/bin/$BIN"
-          else
-            ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
-            zip -r "$ZIP" "$APP"
+            echo "No .app found"
+            exit 1
           fi
+          ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
+          zip -r "$ZIP" "$APP"
           echo "OUTPUT_FILE=$ZIP" >> "$GITHUB_ENV"
 
       - name: Locate and rename output (Linux)
