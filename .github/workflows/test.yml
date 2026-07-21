@@ -151,10 +151,10 @@ jobs:
           APP=$(ls build/bin/*.app 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
             BIN=$(ls build/bin/ | head -1)
-            ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
+            ZIP="build/bin/Void.Presence.Updates.$VER.dmg"
             zip -j "$ZIP" "build/bin/$BIN"
           else
-            ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
+            ZIP="build/bin/Void.Presence.Updates.$VER.dmg"
             zip -r "$ZIP" "$APP"
           fi
           echo "OUTPUT_FILE=$ZIP" >> "$GITHUB_ENV"
