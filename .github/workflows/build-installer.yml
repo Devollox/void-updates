@@ -22,7 +22,7 @@ jobs:
             asset_pattern: 'Void.Presence.*.dmg'
             asset_ext: '.dmg'
           - platform: linux
-            os: ubuntu-latest
+            os: ubuntu-22.04
             wails_platform: linux/amd64
             asset_pattern: 'Void.Presence.*.amd64.deb'
             asset_ext: '.deb'
@@ -131,33 +131,25 @@ jobs:
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
             gcc \
             pkg-config
 
       - name: Install frontend dependencies
-        if: matrix.platform != 'linux'
         working-directory: frontend
         run: npm ci
 
       - name: Install Wails CLI
-        if: matrix.platform != 'linux'
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Build Wails app (${{ matrix.platform }})
-        if: matrix.platform != 'linux'
         shell: bash
         run: |
           wails build -clean -platform ${{ matrix.wails_platform }}
           echo "=== build/bin after build ==="
-          ls -lh build/bin/ || true
-
-      - name: Build Linux CLI updater
-        if: matrix.platform == 'linux'
-        shell: bash
-        run: |
-          VER="${{ steps.ver.outputs.version }}"
-          go build -o build/bin/Void.Presence.Updates.$VER.linux ./cmd/linux-updater
-          echo "=== build/bin after go build ==="
           ls -lh build/bin/ || true
 
       - name: Locate and rename output (Windows)
@@ -178,27 +170,29 @@ jobs:
         shell: bash
         run: |
           VER="${{ steps.ver.outputs.version }}"
-          APP=$(ls build/bin/*.app 2>/dev/null | head -1)
-          if [ -z "$APP" ]; then
-            ls build/bin/
-            echo "No .app found"
+          SRC="binary/Void.Presence.$VER.dmg"
+          if [ ! -f "$SRC" ]; then
+            ls -lh binary/
             exit 1
           fi
-          ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
-          zip -r "$ZIP" "$APP"
-          echo "OUTPUT_FILE=$ZIP" >> "$GITHUB_ENV"
+          DEST="build/bin/Void.Presence.Updates.$VER.dmg"
+          mkdir -p build/bin
+          cp "$SRC" "$DEST"
+          echo "OUTPUT_FILE=$DEST" >> "$GITHUB_ENV"
 
       - name: Locate and rename output (Linux)
         if: matrix.platform == 'linux'
         shell: bash
         run: |
           VER="${{ steps.ver.outputs.version }}"
-          DEST="build/bin/Void.Presence.Updates.$VER.linux"
-          if [ ! -f "$DEST" ]; then
-            ls build/bin/
+          SRC="binary/Void.Presence.$VER.amd64.deb"
+          if [ ! -f "$SRC" ]; then
+            ls -lh binary/
             exit 1
           fi
-          chmod +x "$DEST"
+          DEST="build/bin/Void.Presence.Updates.$VER.deb"
+          mkdir -p build/bin
+          cp "$SRC" "$DEST"
           echo "OUTPUT_FILE=$DEST" >> "$GITHUB_ENV"
 
       - name: Verify output file exists
