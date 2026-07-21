@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"embed"
+	"io"
 	"log"
 	"os"
-  "io"
 	"path/filepath"
+	"runtime"
 
 	"local/void-updates/internal/installer"
 
@@ -21,19 +22,31 @@ var assets embed.FS
 //go:embed binary/*
 var binaryFolder embed.FS
 
+func logDir() string {
+	switch runtime.GOOS {
+	case "windows":
+		if ld := os.Getenv("LOCALAPPDATA"); ld != "" {
+			return filepath.Join(ld, "voidupdates")
+		}
+	case "darwin":
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, "Library", "Logs", "voidupdates")
+		}
+	case "linux":
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, ".local", "share", "voidupdates")
+		}
+	}
+	return os.TempDir()
+}
+
 func initLogging() {
 	exe, _ := os.Executable()
-	exeDir := filepath.Dir(exe)
 
-	localAppData := os.Getenv("LOCALAPPDATA")
-	if localAppData == "" {
-		return
-	}
+	dir := logDir()
+	_ = os.MkdirAll(dir, 0755)
 
-	logDir := filepath.Join(localAppData, "voidupdates")
-	_ = os.MkdirAll(logDir, 0755)
-
-	logPath := filepath.Join(logDir, "updater.log")
+	logPath := filepath.Join(dir, "updater.log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return
@@ -44,7 +57,6 @@ func initLogging() {
 
 	log.Printf("=== Void Presence Updates started ===")
 	log.Printf("exe = %s", exe)
-	log.Printf("exeDir = %s", exeDir)
 	log.Printf("log file = %s", logPath)
 }
 

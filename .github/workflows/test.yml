@@ -4,131 +4,120 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-updater:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            wails_platform: windows/amd64
+            asset_pattern: 'Void.Presence.Setup.*.exe'
+          - platform: macos
+            os: macos-latest
+            wails_platform: darwin/universal
+            asset_pattern: 'Void.Presence.*.dmg'
+          - platform: linux
+            os: ubuntu-latest
+            wails_platform: linux/amd64
+            asset_pattern: 'Void.Presence.*.amd64.deb'
+
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
       actions: write
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: List repo root
-        shell: pwsh
+      - name: Clean binary folder
+        shell: bash
         run: |
-          Write-Host "=== Repo root ==="
-          Get-ChildItem -Recurse -Depth 2
+          mkdir -p binary
+          rm -f binary/*.exe binary/*.dmg binary/*.deb binary/*.rpm binary/*.zip
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Download latest void-presence installer (${{ matrix.platform }})
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_PATTERN: ${{ matrix.asset_pattern }}
+        run: |
+          OWNER="Devollox"
+          REPO="void-presence"
+
+          RELEASE_JSON=$(gh api "repos/$OWNER/$REPO/releases/latest")
+          TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name')
+          echo "Latest release: $TAG"
+
+          ASSET_NAME=$(echo "$RELEASE_JSON" | jq -r --arg pat "$ASSET_PATTERN" '
+            .assets[]
+            | select(.name | test($pat | gsub("\\*"; ".*")))
+            | .name
+          ' | head -1)
+
+          if [ -z "$ASSET_NAME" ]; then
+            echo "ERROR: No asset matching '$ASSET_PATTERN' in release $TAG"
+            echo "Available assets:"
+            echo "$RELEASE_JSON" | jq -r '.assets[].name'
+            exit 1
+          fi
+
+          echo "Downloading: $ASSET_NAME"
+
+          gh release download "$TAG" \
+            --repo "$OWNER/$REPO" \
+            --pattern "$ASSET_NAME" \
+            --dir binary
+
+          echo "=== binary folder ==="
+          ls -lh binary/
+
+      - name: Parse version and update wails.json
+        id: ver
+        shell: bash
+        run: |
+          FILE=$(ls binary/ | head -1)
+          echo "Found: $FILE"
+          BASE="${FILE%.*}"
+          BASE="${BASE%.amd64}"
+          BASE="${BASE%.x86_64}"
+          VERSION="${BASE#Void.Presence.Setup.}"
+          VERSION="${VERSION#Void.Presence.}"
+          echo "Parsed version: $VERSION"
+
+          node -e "
+            const fs = require('fs');
+            const cfg = JSON.parse(fs.readFileSync('wails.json','utf8'));
+            cfg.outputfilename = 'Void.Presence.Updates.$VERSION';
+            fs.writeFileSync('wails.json', JSON.stringify(cfg, null, 2));
+            console.log('wails.json updated:', cfg.outputfilename);
+          "
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Run version synchronization
+        run: node scripts/sync-version.js
+
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
           cache: false
 
-      - name: Prepare binary
-        shell: pwsh
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'linux'
         run: |
-          New-Item -ItemType Directory -Force -Path "binary" | Out-Null
-          Get-ChildItem -Path "binary" -Filter "*.exe" -File | Remove-Item -Force
-          Write-Host "Cleaned binary"
-
-      - name: Download latest Void Presence setup from release
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $owner = 'Devollox'
-          $repo  = 'void-presence'
-
-          $headers = @{
-            'Accept'        = 'application/vnd.github+json'
-            'Authorization' = "Bearer $env:GITHUB_TOKEN"
-          }
-
-          Write-Host "Requesting latest release for $owner/$repo"
-          $release = Invoke-RestMethod `
-            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
-            -Headers $headers
-
-          $tag = $release.tag_name
-          Write-Host "Latest tag in void-presence: $tag"
-
-          $asset = $release.assets |
-            Where-Object { $_.name -like 'Void.Presence.Setup.*.exe' } |
-            Select-Object -First 1
-
-          if (-not $asset) {
-            Write-Host "Assets in release:"
-            $release.assets | ForEach-Object { Write-Host "  - $($_.name)" }
-            throw "Void.Presence.Setup.*.exe not found in latest release $tag"
-          }
-
-          $assetName   = $asset.name
-          $downloadUrl = $asset.browser_download_url
-
-          Write-Host "Selected asset:"
-          Write-Host "  name: $assetName"
-          Write-Host "  url : $downloadUrl"
-
-          New-Item -ItemType Directory -Force -Path "binary" | Out-Null
-
-          $outExe = "binary/$assetName"
-          Write-Host "Downloading exe to $outExe"
-          Invoke-WebRequest -Uri $downloadUrl -OutFile $outExe
-          Write-Host "Download completed"
-
-      - name: Inspect binary folder
-        shell: pwsh
-        run: |
-          Write-Host "=== binary folder contents ==="
-          if (Test-Path "binary") {
-            Get-ChildItem -Path "binary"
-          } else {
-            Write-Host "binary folder DOES NOT EXIST"
-          }
-
-      - name: Update wails.json outputfilename from installer in repo
-        id: parse_version
-        shell: pwsh
-        run: |
-          Write-Host "=== Searching installer in binary ==="
-          $installer = Get-ChildItem -Path "binary" -Filter "Void.Presence.Setup.*.exe" |
-            Select-Object -First 1
-
-          if (-not $installer) {
-            throw "Не найден Void.Presence.Setup.*.exe в binary (from repo)"
-          }
-
-          Write-Host "Found installer:"
-          Write-Host "  FullName: $($installer.FullName)"
-          Write-Host "  Name    : $($installer.Name)"
-
-          $name  = $installer.Name
-          $base  = [System.IO.Path]::GetFileNameWithoutExtension($name)
-          $parts = $base.Split('.')
-
-          Write-Host "  Base    : $base"
-          Write-Host "  Parts   : $($parts -join ', ')"
-
-          $version = ($parts[3..($parts.Length-1)] -join '.')
-          Write-Host "Parsed version from installer name: $version"
-
-          $wailsPath = "wails.json"
-          Write-Host "Updating $wailsPath outputfilename -> Void.Presence.Updates.$version"
-
-          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
-          $config.outputfilename = "Void.Presence.Updates.$version"
-
-          $config | ConvertTo-Json -Depth 10 | Out-File $wailsPath -Encoding UTF8
-
-          Write-Host "wails.json updated"
-          "version=$version" >> $env:GITHUB_OUTPUT
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            gcc \
+            pkg-config
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -137,69 +126,57 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Build Wails app (Windows)
+      - name: Build Wails app (${{ matrix.platform }})
+        shell: bash
+        run: |
+          wails build -clean -platform ${{ matrix.wails_platform }}
+          echo "=== build/bin ==="
+          ls -lh build/bin/ || true
+
+      - name: Locate and rename output (Windows)
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          Write-Host "=== Building Wails app for Windows ==="
-          wails build -clean -platform windows/amd64
-          Write-Host "=== Contents of build\bin after build ==="
-          if (Test-Path "build\bin") {
-            Get-ChildItem -Path "build\bin"
-          } else {
-            Write-Host "build\bin DOES NOT EXIST"
-          }
+          $ver = "${{ steps.ver.outputs.version }}"
+          $src = "build\bin\Void.Presence.Updates.$ver.exe"
+          if (-not (Test-Path $src)) { Get-ChildItem build\bin; throw "Not found: $src" }
+          Write-Host "Output: $src"
+          "OUTPUT_FILE=$src" >> $env:GITHUB_ENV
 
-      - name: Read outputfilename from wails.json
-        id: wails_name
-        shell: pwsh
+      - name: Locate and rename output (macOS)
+        if: matrix.platform == 'macos'
+        shell: bash
         run: |
-          $wailsPath = "wails.json"
-          $config = Get-Content $wailsPath -Raw | ConvertFrom-Json
-          $outfile = $config.outputfilename
-          if (-not $outfile) {
-            throw "outputfilename пустой в wails.json"
-          }
-          $fullPath = "build\bin\$outfile.exe"
-          Write-Host "Will upload: $fullPath"
-          if (-not (Test-Path $fullPath)) {
-            Write-Host "ERROR: File not found: $fullPath"
-            Get-ChildItem -Path "build\bin"
-            throw "Updater exe not found"
-          }
-          "file=$fullPath" >> $env:GITHUB_OUTPUT
+          VER="${{ steps.ver.outputs.version }}"
+          APP=$(ls build/bin/*.app 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            BIN=$(ls build/bin/ | head -1)
+            ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
+            zip -j "$ZIP" "build/bin/$BIN"
+          else
+            ZIP="build/bin/Void.Presence.Updates.$VER.macos.zip"
+            zip -r "$ZIP" "$APP"
+          fi
+          echo "OUTPUT_FILE=$ZIP" >> "$GITHUB_ENV"
 
-      - name: Get latest tag of this repo
-        id: latest_tag
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Locate and rename output (Linux)
+        if: matrix.platform == 'linux'
+        shell: bash
         run: |
-          $owner = 'Devollox'
-          $repo  = 'void-updates'
+          VER="${{ steps.ver.outputs.version }}"
+          SRC="build/bin/Void.Presence.Updates.$VER"
+          DEST="build/bin/Void.Presence.Updates.$VER.linux"
+          mv "$SRC" "$DEST"
+          chmod +x "$DEST"
+          echo "OUTPUT_FILE=$DEST" >> "$GITHUB_ENV"
 
-          $headers = @{
-            'Accept'        = 'application/vnd.github+json'
-            'Authorization' = "Bearer $env:GITHUB_TOKEN"
-          }
+      - name: Verify output
+        shell: bash
+        run: ls -lh "$OUTPUT_FILE"
 
-          Write-Host "Requesting latest release for $owner/$repo"
-          $release = Invoke-RestMethod `
-            -Uri "https://api.github.com/repos/$owner/$repo/releases/latest" `
-            -Headers $headers
-
-          $tag = $release.tag_name
-          if (-not $tag) {
-            throw "Не удалось получить latest tag для $owner/$repo"
-          }
-
-          Write-Host "Latest release tag: $tag"
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-
-      - name: Upload updater to latest release
-        uses: softprops/action-gh-release@v2
+      - name: Upload test artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: ${{ steps.wails_name.outputs.file }}
-          tag_name: ${{ steps.latest_tag.outputs.tag }}
-          overwrite_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: test-updater-${{ matrix.platform }}
+          path: ${{ env.OUTPUT_FILE }}
+          retention-days: 3
