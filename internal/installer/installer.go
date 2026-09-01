@@ -34,9 +34,9 @@ func (i *Installer) Startup(ctx context.Context) {
 func embeddedInstallerPrefix() string {
 	switch runtime.GOOS {
 	case "darwin":
-		return "Void.Presence."
+		return "Void.Presence.Setup."
 	case "linux":
-		return "Void.Presence."
+		return "Void.Presence.Setup."
 	default:
 		return "Void.Presence.Setup."
 	}
