@@ -152,6 +152,14 @@ jobs:
           echo "=== build/bin after build ==="
           ls -lh build/bin/ || true
 
+      - name: Ad-hoc sign macOS app
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          APP=$(find build/bin -maxdepth 1 -name "*.app" | head -1)
+          echo "Signing: $APP"
+          codesign --force --deep --sign - "$APP"
+
       - name: Locate and rename output (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
